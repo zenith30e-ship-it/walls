@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walls</title>
+<style>
+:root{--bg:#f4f1ea;--card:#fff;--tx:#222;--mut:#777;--cell:#e6dcc8;--gap:#cbbd9f;--wall:#5b3a1e;--p0:#e76f51;--p1:#2a6f97;--ok:rgba(42,157,100,.55);--bad:rgba(200,50,50,.35);--dot:rgba(42,157,100,.6);color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1a17;--card:#26241f;--tx:#eee;--mut:#9a958a;--cell:#3a362d;--gap:#2c2922;--wall:#e0b46c;--p0:#f08a6e;--p1:#5aa9e6;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1b1a17;--card:#26241f;--tx:#eee;--mut:#9a958a;--cell:#3a362d;--gap:#2c2922;--wall:#e0b46c;--p0:#f08a6e;--p1:#5aa9e6;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px}
+h1{margin:4px 0;font-size:1.6rem;letter-spacing:.05em}
+.top{display:flex;gap:8px;width:min(100%,520px);margin:6px 0}
+.pl{flex:1;background:var(--card);border-radius:10px;padding:8px 10px;border:2px solid transparent;font-size:.9rem}
+.pl.on{border-color:currentColor}
+.pl b{display:block}
+#board{width:min(100%,520px);aspect-ratio:1;display:grid;grid-template-columns:repeat(9,minmax(0,1fr) minmax(0,.3fr));grid-template-columns:repeat(8,minmax(0,1fr) minmax(0,.3fr)) minmax(0,1fr);grid-template-rows:repeat(8,minmax(0,1fr) minmax(0,.3fr)) minmax(0,1fr);background:var(--gap);border-radius:8px;padding:6px;touch-action:manipulation}
+.cell{background:var(--cell);border-radius:4px;position:relative;display:flex;align-items:center;justify-content:center;cursor:default}
+.cell small{position:absolute;font-size:.6rem;color:var(--mut);pointer-events:none}
+.rk{top:2px;left:3px}.fl{bottom:1px;right:3px}
+.pawn{width:68%;height:68%;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,.4)}
+.pawn.a{background:var(--p0)}.pawn.b{background:var(--p1)}
+.cell.m{cursor:pointer}
+.cell.m::after{content:"";width:34%;height:34%;border-radius:50%;background:var(--dot)}
+.wall{background:var(--wall);border-radius:3px;z-index:3}
+.slot{z-index:1;border-radius:3px;cursor:pointer}
+.slot.v{z-index:2}
+.slot.ok:hover{background:var(--ok)}
+.slot.bad:hover{background:var(--bad);cursor:not-allowed}
+#msg{margin:8px 0 4px;font-weight:600;min-height:1.4em;text-align:center}
+#log{width:min(100%,520px);font:.8rem ui-monospace,monospace;color:var(--mut);max-height:4.5em;overflow:auto;background:var(--card);border-radius:8px;padding:6px 10px}
+button{font:inherit;padding:6px 14px;border-radius:8px;border:0;background:var(--wall);color:var(--bg);cursor:pointer;margin:6px 0}
+.help{width:min(100%,520px);font-size:.8rem;color:var(--mut);line-height:1.4}
+</style>
+</head>
+<body>
+<h1>WALLS</h1>
+<div class="top"><div class="pl" id="p0"></div><div class="pl" id="p1"></div></div>
+<div id="msg"></div>
+<div id="board"></div>
+<button id="new">New game</button>
+<div id="log"></div>
+<p class="help">Reach the opposite side first. On your turn, click a green dot to move one square (you can jump an adjacent pawn), or click a gap between squares to place a wall (2 squares long). You can’t completely block a player’s path. Each player has 10 walls. Squares are named a–i and 1–9; a wall is named by the square it sits above (h) or to the right of (v), e.g. e4h.</p>
+<script>
+const F="abcdefghi",D=[[0,1],[0,-1],[1,0],[-1,0]];
+let S;
+const mk=()=>Array.from({length:8},()=>Array(8).fill(false));
+function init(){S={p:[{x:4,y:0,w:10,g:8},{x:4,y:8,w:10,g:0}],hw:mk(),vw:mk(),t:0,log:[],over:false}}
+const inB=(x,y)=>x>=0&&x<9&&y>=0&&y<9;
+const H=(c,r)=>c>=0&&c<8&&r>=0&&r<8&&S.hw[c][r];
+const V=(c,r)=>c>=0&&c<8&&r>=0&&r<8&&S.vw[c][r];
+function blocked(x,y,dx,dy){
+  if(dy==1)return H(x,y)||H(x-1,y);
+  if(dy==-1)return H(x,y-1)||H(x-1,y-1);
+  if(dx==1)return V(x,y)||V(x,y-1);
+  return V(x-1,y)||V(x-1,y-1);
+}
+function moves(i){
+  const me=S.p[i],op=S.p[1-i],r=[];
+  for(const[dx,dy]of D){
+    const nx=me.x+dx,ny=me.y+dy;
+    if(!inB(nx,ny)||blocked(me.x,me.y,dx,dy))continue;
+    if(nx==op.x&&ny==op.y){
+      const jx=nx+dx,jy=ny+dy;
+      if(inB(jx,jy)&&!blocked(nx,ny,dx,dy))r.push([jx,jy]);
+      else for(const[ex,ey]of D){
+        if((ex&&dx)||(ey&&dy))continue;
+        const ax=nx+ex,ay=ny+ey;
+        if(inB(ax,ay)&&!blocked(nx,ny,ex,ey))r.push([ax,ay]);
+      }
+    }else r.push([nx,ny]);
+  }
+  return r;
+}
+function path(i){
+  const p=S.p[i],seen=new Set([p.x+","+p.y]),q=[[p.x,p.y]];
+  while(q.length){
+    const[x,y]=q.shift();
+    if(y==p.g)return true;
+    for(const[dx,dy]of D){
+      const nx=x+dx,ny=y+dy,k=nx+","+ny;
+      if(inB(nx,ny)&&!seen.has(k)&&!blocked(x,y,dx,dy)){seen.add(k);q.push([nx,ny])}
+    }
+  }
+  return false;
+}
+function wallOK(o,c,r){
+  if(o=="h"){if(S.hw[c][r]||H(c-1,r)||H(c+1,r)||S.vw[c][r])return false}
+  else if(S.vw[c][r]||V(c,r-1)||V(c,r+1)||S.hw[c][r])return false;
+  const a=o=="h"?S.hw:S.vw;a[c][r]=true;
+  const ok=path(0)&&path(1);a[c][r]=false;return ok;
+}
+function render(){
+  const cur=S.p[S.t],mv=S.over?[]:moves(S.t);
+  let h="";
+  for(let y=8;y>=0;y--)for(let x=0;x<9;x++){
+    const m=mv.some(a=>a[0]==x&&a[1]==y);
+    const pw=S.p[0].x==x&&S.p[0].y==y?"a":S.p[1].x==x&&S.p[1].y==y?"b":"";
+    h+=`<div class="cell${m?" m":""}" style="grid-row:${2*(8-y)+1};grid-column:${2*x+1}"${m?` data-m="${x},${y}"`:""}>`+
+      (x==0?`<small class="rk">${y+1}</small>`:"")+(y==0?`<small class="fl">${F[x]}</small>`:"")+
+      (pw?`<div class="pawn ${pw}"></div>`:"")+`</div>`;
+  }
+  const can=!S.over&&cur.w>0;
+  for(let c=0;c<8;c++)for(let r=0;r<8;r++){
+    const gh=`grid-row:${16-2*r};grid-column:${2*c+1}/span 3`;
+    const gv=`grid-row:${15-2*r}/span 3;grid-column:${2*c+2}`;
+    if(S.hw[c][r])h+=`<div class="wall" style="${gh}"></div>`;
+    else if(can)h+=`<div class="slot h ${wallOK("h",c,r)?"ok":"bad"}" style="${gh}" data-w="${c},${r},h"></div>`;
+    if(S.vw[c][r])h+=`<div class="wall" style="${gv}"></div>`;
+    else if(can)h+=`<div class="slot v ${wallOK("v",c,r)?"ok":"bad"}" style="${gv}" data-w="${c},${r},v"></div>`;
+  }
+  board.innerHTML=h;
+  for(let i=0;i<2;i++){
+    const e=document.getElementById("p"+i);
+    e.style.color=i?"var(--p1)":"var(--p0)";
+    e.className="pl"+(S.t==i&&!S.over?" on":"");
+    e.innerHTML=`<b>Player ${i+1}${i?" (top)":" (bottom)"}</b><span style="color:var(--tx)">Walls left: ${S.p[i].w}</span>`;
+  }
+  msg.textContent=S.over?`Player ${S.t+1} wins!`:`Player ${S.t+1}’s turn`;
+  log.textContent=S.log.join("  ");log.scrollTop=log.scrollHeight;
+}
+function end(note){
+  S.log.push(note);
+  if(S.p[S.t].y==S.p[S.t].g&&note.length==2)S.over=true;else S.t=1-S.t;
+  render();
+}
+board.addEventListener("click",e=>{
+  if(S.over)return;
+  const m=e.target.closest("[data-m]"),w=e.target.closest("[data-w]");
+  if(m){
+    const[x,y]=m.dataset.m.split(",").map(Number),p=S.p[S.t];
+    p.x=x;p.y=y;end(F[x]+(y+1));
+  }else if(w){
+    const[c,r,o]=w.dataset.w.split(",");
+    if(!w.classList.contains("ok"))return;
+    (o=="h"?S.hw:S.vw)[+c][+r]=true;S.p[S.t].w--;
+    end(F[+c]+(+r+1)+o);
+  }
+});
+document.getElementById("new").onclick=()=>{init();render()};
+init();render();
+</script>
+</body>
+</html>
